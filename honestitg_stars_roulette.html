@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Рулетка honestiTG</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#17110e;--panel:#241914;--panel-soft:#2b1e17;--ink:#f7eee5;
+  --mute:#b9a394;--line:rgba(220,155,104,.19);--accent:#d97732;
+  --accent2:#a94e27;--gold:#f2b653;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px)
+}
+*{box-sizing:border-box}
+html{min-height:100%;background:var(--bg)}
+body{
+  margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  color:var(--ink);font:400 15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:radial-gradient(ellipse at 50% 0%,#493022 0%,#241812 38%,var(--bg) 76%);
+}
+main{position:relative;isolation:isolate;max-width:420px;width:100%;padding:28px 18px 42px;text-align:center;overflow:hidden}
+main:before,main:after{content:"";position:absolute;z-index:-1;width:145px;height:145px;opacity:.13;pointer-events:none;background:radial-gradient(ellipse at center,#d97732 0 8%,transparent 9%);filter:blur(22px)}
+main:before{top:130px;left:-90px}main:after{right:-90px;bottom:100px}
+h1{font-size:25px;line-height:1.2;font-weight:750;letter-spacing:-.6px;margin:4px 0 7px;color:#f6e7d8}
+h1 span{color:#e69a51}
+.sub{color:var(--mute);font-size:13px;margin:0 auto 22px;max-width:290px}
+.reel-wrap{position:relative;margin:0 auto 21px;width:100%;max-width:340px}
+.reel-frame{position:relative;width:100%;aspect-ratio:1.38/1;border-radius:16px;overflow:hidden;border:2px solid #bd713d;box-shadow:0 10px 30px rgba(0,0,0,.32),0 0 0 5px rgba(189,113,61,.08);background:var(--panel)}
+.reel-strip{position:absolute;left:0;top:0;width:100%;will-change:transform}
+.reel-strip img,.reel-strip .card{
+  display:block;width:100%;height:auto;aspect-ratio:1.38/1;object-fit:cover;
+  border-bottom:1px solid rgba(255,255,255,.12)
+}
+.reel-strip .card{
+  display:flex;align-items:center;justify-content:center;
+  font-size:42px;font-weight:800;color:#f6e7d8;
+  background:linear-gradient(145deg,#3a2418,#1e1410);
+}
+.pointer{position:absolute;right:-14px;top:50%;transform:translateY(-50%);width:0;height:0;border-top:12px solid transparent;border-bottom:12px solid transparent;border-right:18px solid var(--gold);filter:drop-shadow(0 2px 5px rgba(242,182,83,.35))}
+.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,12,8,.32),transparent 22%,transparent 78%,rgba(20,12,8,.4));pointer-events:none}
+.spin-caption{display:flex;align-items:center;justify-content:center;gap:8px;color:#d2ad8e;font-size:10px;font-weight:700;letter-spacing:1.5px;margin:0 0 10px;text-transform:uppercase}
+.spin-caption:before,.spin-caption:after{content:"";height:1px;width:23px;background:rgba(210,173,142,.38)}
+button{font:inherit;font-weight:700;border:none;border-radius:13px;padding:16px 20px;cursor:pointer;width:100%;transition:transform .16s ease,filter .16s ease}
+#spin{background:linear-gradient(105deg,#b85d2d,#e18b3e);color:#fffaf4;font-size:16px;letter-spacing:.2px;box-shadow:0 7px 18px rgba(177,87,43,.23),inset 0 1px 0 rgba(255,255,255,.18)}
+#spin:not(:disabled):active{transform:scale(.985);filter:brightness(.96)}
+#spin:disabled{opacity:.5;cursor:default}
+#result{min-height:48px;margin-top:14px;font-size:15px;font-weight:600;color:#f2dfce}
+#cooldown{display:inline-block;color:var(--mute);font-size:12px;margin-top:2px;padding:6px 12px;border:1px solid var(--line);border-radius:30px;background:rgba(255,255,255,.025)}
+.rules{margin-top:25px;text-align:left;background:linear-gradient(145deg,rgba(49,34,26,.96),rgba(35,24,19,.96));border:1px solid var(--line);border-radius:17px;padding:16px 17px 14px;color:var(--mute);box-shadow:0 12px 28px rgba(0,0,0,.14)}
+.rules b{color:var(--ink);font-weight:700}
+.rules div{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px}
+.rules .rules-heading{padding:0 0 9px;margin-bottom:5px;border-bottom:1px solid rgba(220,155,104,.12);font-size:15px}
+.rules .chance-label{display:flex;align-items:center;gap:8px}
+.rules .chance-label:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--dot);flex:none}
+.rules .chance-value{font-variant-numeric:tabular-nums;color:#f5e6d8}
+@media(max-width:360px){main{padding-left:15px;padding-right:15px}.reel-wrap{max-width:100%}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="spin-caption">Осенний сезон</div>
+  <h1>Рулетка <span>honestiTG</span></h1>
+  <div class="sub">Одна прокрутка — 100 ⭐ Telegram Stars</div>
+  <div class="reel-wrap">
+    <div class="reel-frame photo-reel">
+      <div class="reel-strip" id="strip"></div>
+      <div class="shade"></div>
+    </div>
+    <div class="pointer"></div>
+  </div>
+  <button id="spin">Крутить за 100 ⭐</button>
+  <div id="result" aria-live="polite"></div>
+  <div id="cooldown"></div>
+  <div class="sub" style="margin-top:14px;font-size:11px">Оплата через Telegram Stars · 100 ⭐ за крутку</div>
+  <div class="rules">
+    <div class="rules-heading"><b>Шансы</b></div>
+    <div><span class="chance-label" style="--dot:#8a8a8a">Пусто</span><span class="chance-value">55%</span></div>
+    <div><span class="chance-label" style="--dot:#7ec8a0">Обычный (1–5)</span><span class="chance-value">30%</span></div>
+    <div><span class="chance-label" style="--dot:#6aa3d8">Редкий (10–40)</span><span class="chance-value">10%</span></div>
+    <div><span class="chance-label" style="--dot:#b07ae0">Эпический (100)</span><span class="chance-value">3%</span></div>
+    <div><span class="chance-label" style="--dot:#f2b653">Легендарный (140)</span><span class="chance-value">1%</span></div>
+    <div><span class="chance-label" style="--dot:#e85d4c">Мифический (85)</span><span class="chance-value">1%</span></div>
+  </div>
+</main>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#17110e"); tg.setBackgroundColor("#17110e"); } catch(_){} }
+
+// Картинки (положите fortnite-1/2/3.jpg в assets/). Если нет — цветные карточки с эмодзи.
+const PHOTO_SRCS = ["assets/fortnite-1.jpg","assets/fortnite-2.jpg","assets/fortnite-3.jpg"];
+const FALLBACK_EMOJI = ["🍒","💎","⭐"];
+const strip = document.getElementById("strip");
+const frame = document.querySelector(".reel-frame");
+const spinButton = document.getElementById("spin");
+const resultBox = document.getElementById("result");
+const cooldownBox = document.getElementById("cooldown");
+let isSpinning = false;
+let usePhotos = true;
+
+function addCard(index) {
+  if (usePhotos) {
+    const img = document.createElement("img");
+    img.src = PHOTO_SRCS[index % PHOTO_SRCS.length];
+    img.alt = "prize";
+    img.draggable = false;
+    img.onerror = () => {
+      usePhotos = false;
+      img.replaceWith(makeEmojiCard(index));
+    };
+    strip.appendChild(img);
+  } else {
+    strip.appendChild(makeEmojiCard(index));
+  }
+}
+function makeEmojiCard(index) {
+  const div = document.createElement("div");
+  div.className = "card";
+  div.textContent = FALLBACK_EMOJI[index % FALLBACK_EMOJI.length];
+  return div;
+}
+function buildReel() {
+  for (let i = 0; i < 18; i++) addCard(i % 3);
+  strip.style.transform = "translateY(0)";
+}
+buildReel();
+
+function initData() {
+  return tg?.initData || "";
+}
+function setBusy(busy, label) {
+  isSpinning = busy;
+  spinButton.disabled = busy;
+  spinButton.textContent = label || (busy ? "Оплата / прокрутка…" : "Крутить за 100 ⭐");
+}
+function showError(message) {
+  resultBox.textContent = message;
+}
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function requestInvoice() {
+  if (!tg || !tg.initData) {
+    throw new Error("Открой рулетку внутри Telegram, чтобы оплатить прокрутку звёздами.");
+  }
+  const response = await fetch("/api/create-invoice", {
+    method: "POST",
+    headers: {"Content-Type":"application/json", "X-Telegram-Init-Data": initData()},
+    body: JSON.stringify({})
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.invoiceUrl) throw new Error(data.error || "Не удалось создать счёт на оплату.");
+  return data.invoiceUrl;
+}
+
+function animateToPhoto(index) {
+  return new Promise(resolve => {
+    const cardHeight = frame.clientHeight || 200;
+    const sequence = [];
+    for (let i = 0; i < 15; i++) sequence.push((i + Math.floor(Math.random() * 3)) % 3);
+    sequence.push(index % 3);
+    strip.innerHTML = "";
+    sequence.forEach(i => addCard(i));
+    strip.style.transition = "none";
+    strip.style.transform = "translateY(0)";
+    void strip.offsetHeight;
+    strip.style.transition = "transform 4.2s cubic-bezier(.10,.72,.12,1)";
+    strip.style.transform = `translateY(-${(sequence.length - 1) * cardHeight}px)`;
+    strip.addEventListener("transitionend", () => resolve(), { once: true });
+    setTimeout(resolve, 4500);
+  });
+}
+
+async function getPaidSpin() {
+  // successful_payment приходит боту вебхуком/поллингом; клиент ждёт кредит
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const response = await fetch("/api/spin", {
+      method: "POST",
+      headers: {"Content-Type":"application/json", "X-Telegram-Init-Data": initData()},
+      body: JSON.stringify({})
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) return data;
+    if (response.status !== 409) throw new Error(data.error || "Не удалось запустить рулетку.");
+    await sleep(800);
+  }
+  throw new Error("Оплата ещё подтверждается. Подождите и нажмите кнопку ещё раз.");
+}
+
+spinButton.addEventListener("click", async () => {
+  if (isSpinning) return;
+  resultBox.textContent = "";
+  setBusy(true, "Создаём счёт…");
+  try {
+    const invoiceUrl = await requestInvoice();
+    await new Promise((resolve, reject) => {
+      tg.openInvoice(invoiceUrl, status => {
+        if (status === "paid") resolve();
+        else if (status === "cancelled") reject(new Error("Оплата отменена."));
+        else reject(new Error("Платёж не завершён. Попробуйте ещё раз."));
+      });
+    });
+    setBusy(true, "Подтверждаем оплату…");
+    const prize = await getPaidSpin();
+    setBusy(true, "Крутим…");
+    await animateToPhoto(prize.imageIndex ?? 0);
+    if (prize.name === "Пусто") {
+      resultBox.textContent = "В этот раз без приза. Спасибо за участие!";
+    } else {
+      resultBox.innerHTML = `<b>${escapeHtml(prize.name)}</b><br>${escapeHtml(prize.desc)}<br><span style="color:var(--mute);font-size:13px">Для получения приза напишите менеджеру.</span>`;
+    }
+    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+    cooldownBox.textContent = "Прокрутка оплачена · 100 ⭐";
+  } catch (error) {
+    showError(error.message || "Что-то пошло не так.");
+  } finally {
+    setBusy(false);
+  }
+});
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+cooldownBox.textContent = "Оплата через Telegram Stars";
+</script>
+</body>
+</html>
