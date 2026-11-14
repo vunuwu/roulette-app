@@ -69,9 +69,16 @@ button{font:inherit;font-weight:700;border:none;border-radius:13px;padding:16px 
   <button id="freeSpin" disabled>🎁 Бесплатная прокрутка</button>
   <button id="spin">Крутить за 100 ⭐</button>
   <div id="result" aria-live="polite"></div>
-  <div id="cooldown"></div><div class="sub" style="margin-top:14px;font-size:11px">Оплата проходит через Telegram Stars. Стоимость одной прокрутки — 100 ⭐</div></main>
+  <div id="cooldown"></div><div class="sub" style="margin-top:14px;font-size:11px">Оплата проходит через Telegram Stars. Стоимость одной прокрутки — 100 ⭐</div>
+</main>
+
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
+// ВАЖНО: сюда нужно вставить публичный HTTPS-адрес,
+// по которому доступен твой app.py в Termux.
+const API_BASE = "https://REPLACE-WITH-YOUR-BOT-HOST";
+const apiUrl = (path) => `${API_BASE.replace(/\/$/, "")}${path}`;
+
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
@@ -81,19 +88,20 @@ const frame = document.querySelector(".reel-frame");
 const spinButton = document.getElementById("spin");
 const resultBox = document.getElementById("result");
 const cooldownBox = document.getElementById("cooldown");
-const CARD_MS = 0; // set from actual rendered frame size
+const CARD_MS = 0;
 let isSpinning = false;
 const freeButton = document.getElementById("freeSpin");
 let freeMsLeft = 0;
 
 function addPhoto(src, alt) {
   const img = document.createElement("img");
-  img.src = src; img.alt = alt || "Fortnite аккаунт";
+  img.src = src;
+  img.alt = alt || "Fortnite аккаунт";
   img.draggable = false;
   strip.appendChild(img);
 }
+
 function buildReel() {
-  // Long strip of the user's supplied banner photos, repeated for a smooth roll.
   for (let i=0; i<18; i++) addPhoto(PHOTOS[i % PHOTOS.length]);
   strip.style.transform = "translateY(0)";
 }
@@ -102,85 +110,117 @@ buildReel();
 function initData() {
   return tg?.initData || "";
 }
+
 function fmtLeft(ms) {
-  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
   return h + " ч " + m + " мин";
 }
+
 function updateFreeButton() {
   freeButton.disabled = isSpinning || freeMsLeft > 0;
   freeButton.textContent = freeMsLeft > 0
     ? "Бесплатная прокрутка через " + fmtLeft(freeMsLeft)
     : "🎁 Бесплатная прокрутка";
 }
+
 function setBusy(busy, label) {
   isSpinning = busy;
   spinButton.disabled = busy;
   spinButton.textContent = label || (busy ? "Оплата / прокрутка…" : "Крутить за 100 ⭐");
   updateFreeButton();
 }
+
 function showError(message) {
   resultBox.textContent = message;
 }
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function requestInvoice() {
   if (!tg || !tg.initData) {
     throw new Error("Открой рулетку внутри Telegram, чтобы оплатить прокрутку звёздами.");
   }
-  const response = await fetch("/api/create-invoice", {
+
+  const response = await fetch(apiUrl("/api/create-invoice"), {
     method: "POST",
-    headers: {"Content-Type":"application/json", "X-Telegram-Init-Data":initData()},
+    headers: {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData()
+    },
     body: JSON.stringify({})
   });
+
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.invoiceUrl) throw new Error(data.error || "Не удалось создать счёт на оплату.");
+
+  if (!response.ok || !data.invoiceUrl) {
+    throw new Error(data.error || "Не удалось создать счёт на оплату.");
+  }
+
   return data.invoiceUrl;
 }
 
 function animateToPhoto(index) {
   return new Promise(resolve => {
     const cardHeight = frame.clientHeight;
-    const targetIndex = 12 + (index % PHOTOS.length);
-    // Build an animation strip where the chosen final banner is at the stopping point.
     const sequence = [];
-    for (let i=0; i<15; i++) sequence.push(PHOTOS[(i + Math.floor(Math.random()*3)) % 3]);
+
+    for (let i=0; i<15; i++) {
+      sequence.push(PHOTOS[(i + Math.floor(Math.random()*3)) % 3]);
+    }
+
     sequence.push(PHOTOS[index % 3]);
     strip.innerHTML = "";
     sequence.forEach(src => addPhoto(src));
+
     strip.style.transition = "none";
     strip.style.transform = "translateY(0)";
     void strip.offsetHeight;
+
     strip.style.transition = "transform 4.2s cubic-bezier(.10,.72,.12,1)";
     strip.style.transform = `translateY(-${(sequence.length-1)*cardHeight}px)`;
+
     strip.addEventListener("transitionend", () => resolve(), {once:true});
-    // Fallback for webviews that do not fire transitionend reliably.
     setTimeout(resolve, 4500);
   });
 }
 
 async function getPaidSpin() {
-  // A successful invoice UI callback is not treated as payment proof;
-  // the server waits for Telegram's successful_payment webhook.
   for (let attempt=0; attempt<12; attempt++) {
-    const response = await fetch("/api/spin", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","X-Telegram-Init-Data":initData()},
-      body:JSON.stringify({})
+    const response = await fetch(apiUrl("/api/spin"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": initData()
+      },
+      body: JSON.stringify({})
     });
+
     const data = await response.json().catch(() => ({}));
+
     if (response.ok) return data;
-    if (response.status !== 409) throw new Error(data.error || "Не удалось запустить рулетку.");
+
+    if (response.status !== 409) {
+      throw new Error(data.error || "Не удалось запустить рулетку.");
+    }
+
     await sleep(1000);
   }
-  throw new Error("Оплата ещё подтверждается. Подождите немного и нажмите «Проверить оплату».");
+
+  throw new Error("Оплата ещё подтверждается. Подождите немного и попробуйте снова.");
 }
 
 spinButton.addEventListener("click", async () => {
   if (isSpinning) return;
+
   resultBox.textContent = "";
   setBusy(true, "Создаём счёт…");
+
   try {
     const invoiceUrl = await requestInvoice();
+
     await new Promise((resolve, reject) => {
       tg.openInvoice(invoiceUrl, status => {
         if (status === "paid") resolve();
@@ -188,26 +228,35 @@ spinButton.addEventListener("click", async () => {
         else reject(new Error("Платёж не завершён. Попробуйте ещё раз."));
       });
     });
+
     setBusy(true, "Подтверждаем оплату…");
     const prize = await getPaidSpin();
+
     setBusy(true, "Крутим…");
     await animateToPhoto(prize.imageIndex ?? 0);
+
     if (prize.name === "Пусто") {
       resultBox.textContent = "В этот раз без приза. Спасибо за участие!";
     } else {
-      resultBox.innerHTML = `<b>${escapeHtml(prize.name)}</b><br>${escapeHtml(prize.desc)}<br><span style="color:var(--mute);font-size:13px">Для получения приза напишите менеджеру.</span>`;
+      resultBox.innerHTML =
+        `<b>${escapeHtml(prize.name)}</b><br>${escapeHtml(prize.desc)}<br>` +
+        `<span style="color:var(--mute);font-size:13px">Для получения приза напишите менеджеру.</span>`;
     }
-    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+
+    if (tg?.HapticFeedback) {
+      tg.HapticFeedback.notificationOccurred("success");
+    }
+
     cooldownBox.textContent = "Прокрутка оплачена · 100 ⭐";
+
   } catch (error) {
     showError(error.message || "Что-то пошло не так.");
   } finally {
     setBusy(false);
   }
 });
-// ----- Бесплатная прокрутка -----
-// С сервером (server.js): лимит 24 ч хранится на сервере и привязан к Telegram-пользователю.
-// Без сервера (только html на GitHub Pages): лимит хранится в браузере этого устройства.
+
+// Бесплатная прокрутка
 const FREE_PRIZES = [
   {name:"Пусто",desc:"В этот раз ничего не выпало",chance:55,imageIndex:0},
   {name:"Обычный приз",desc:"1–5 скинов",chance:30,imageIndex:0},
@@ -216,64 +265,120 @@ const FREE_PRIZES = [
   {name:"Легендарный приз",desc:"140 скинов",chance:1,imageIndex:2},
   {name:"Мифический приз",desc:"85 скинов",chance:1,imageIndex:2}
 ];
+
 const FREE_KEY = "honestitg_free_spin_last";
 const FREE_MS = 24 * 60 * 60 * 1000;
 let freeServerMode = false;
 
 function pickFreePrizeLocal() {
-  let roll = Math.random() * 100, sum = 0;
-  for (const p of FREE_PRIZES) { sum += p.chance; if (roll < sum) return p; }
+  let roll = Math.random() * 100;
+  let sum = 0;
+
+  for (const p of FREE_PRIZES) {
+    sum += p.chance;
+    if (roll < sum) return p;
+  }
+
   return FREE_PRIZES[0];
 }
+
 function localMsLeft() {
-  try { return Math.max(0, FREE_MS - (Date.now() - Number(localStorage.getItem(FREE_KEY) || 0))); }
-  catch { return 0; }
+  try {
+    return Math.max(0, FREE_MS - (Date.now() - Number(localStorage.getItem(FREE_KEY) || 0)));
+  } catch {
+    return 0;
+  }
 }
+
 async function loadFreeStatus() {
   freeServerMode = false;
+
   try {
-    const response = await fetch("/api/free-status", {headers: {"X-Telegram-Init-Data": initData()}});
+    const response = await fetch(apiUrl("/api/free-status"), {
+      headers: {"X-Telegram-Init-Data": initData()}
+    });
+
     const data = await response.json().catch(() => null);
-    if (data && (response.ok || response.status === 401)) {   // сервер есть
+
+    if (data && (response.ok || response.status === 401)) {
       freeServerMode = true;
       freeMsLeft = response.ok ? Number(data.msLeft || 0) : 0;
     }
   } catch {}
-  if (!freeServerMode) freeMsLeft = localMsLeft();            // сервера нет: лимит в браузере
+
+  if (!freeServerMode) freeMsLeft = localMsLeft();
+
   updateFreeButton();
 }
+
 async function getFreePrize() {
   if (!freeServerMode) {
-    if (localMsLeft() > 0) throw new Error("Бесплатная прокрутка уже использована.");
+    if (localMsLeft() > 0) {
+      throw new Error("Бесплатная прокрутка уже использована.");
+    }
+
     const prize = pickFreePrizeLocal();
-    try { localStorage.setItem(FREE_KEY, String(Date.now())); } catch {}
+
+    try {
+      localStorage.setItem(FREE_KEY, String(Date.now()));
+    } catch {}
+
     return prize;
   }
-  if (!tg || !tg.initData) throw new Error("Открой рулетку внутри Telegram.");
-  const response = await fetch("/api/free-spin", {
+
+  if (!tg || !tg.initData) {
+    throw new Error("Открой рулетку внутри Telegram.");
+  }
+
+  const response = await fetch(apiUrl("/api/free-spin"), {
     method: "POST",
-    headers: {"Content-Type": "application/json", "X-Telegram-Init-Data": initData()},
+    headers: {
+      "Content-Type": "application/json",
+      "X-Telegram-Init-Data": initData()
+    },
     body: JSON.stringify({})
   });
+
   const prize = await response.json().catch(() => ({}));
-  if (response.status === 429) { freeMsLeft = Number(prize.msLeft || 0); throw new Error(prize.error); }
-  if (!response.ok) throw new Error(prize.error || "Не удалось запустить прокрутку.");
+
+  if (response.status === 429) {
+    freeMsLeft = Number(prize.msLeft || 0);
+    throw new Error(prize.error);
+  }
+
+  if (!response.ok) {
+    throw new Error(prize.error || "Не удалось запустить прокрутку.");
+  }
+
   return prize;
 }
+
 freeButton.addEventListener("click", async () => {
   if (isSpinning || freeMsLeft > 0) return;
+
   resultBox.textContent = "";
-  isSpinning = true; updateFreeButton(); spinButton.disabled = true;
+  isSpinning = true;
+  updateFreeButton();
+  spinButton.disabled = true;
+
   try {
     const prize = await getFreePrize();
     freeMsLeft = FREE_MS;
+
     await animateToPhoto(prize.imageIndex ?? 0);
+
     if (prize.name === "Пусто") {
       resultBox.textContent = "В этот раз без приза. Приходи завтра!";
     } else {
-      resultBox.innerHTML = `<b>${escapeHtml(prize.name)}</b><br>${escapeHtml(prize.desc)}<br><span style="color:var(--mute);font-size:13px">Для получения приза напишите менеджеру.</span>`;
+      resultBox.innerHTML =
+        `<b>${escapeHtml(prize.name)}</b><br>${escapeHtml(prize.desc)}<br>` +
+        `<span style="color:var(--mute);font-size:13px">Для получения приза напишите менеджеру.</span>`;
     }
-    if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+
+    if (tg?.HapticFeedback) {
+      tg.HapticFeedback.notificationOccurred("success");
+    }
+
   } catch (error) {
     showError(error.message || "Что-то пошло не так.");
   } finally {
@@ -282,12 +387,26 @@ freeButton.addEventListener("click", async () => {
     updateFreeButton();
   }
 });
-setInterval(() => { if (freeMsLeft > 0) { freeMsLeft = Math.max(0, freeMsLeft - 30000); updateFreeButton(); } }, 30000);
+
+setInterval(() => {
+  if (freeMsLeft > 0) {
+    freeMsLeft = Math.max(0, freeMsLeft - 30000);
+    updateFreeButton();
+  }
+}, 30000);
+
 loadFreeStatus();
 
 function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  return String(value).replace(/[&<>"']/g, c => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
+  }[c]));
 }
+
 cooldownBox.textContent = "Оплата через Telegram Stars";
 </script>
 </body>
