@@ -75,6 +75,19 @@ button{font:inherit;font-weight:700;border:none;border-radius:13px;padding:16px 
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
+const API_BASE = (() => {
+  // Адрес сервера берётся из ?api=... в ссылке (или из сохранённого). Пусто = тот же сайт.
+  try {
+    const q = new URLSearchParams(location.search).get("api");
+    if (q) localStorage.setItem("honestitg_api", q);
+    return (q || localStorage.getItem("honestitg_api") || "").replace(/\/$/, "");
+  } catch { return ""; }
+})();
+function apiFetch(path, opts = {}) {
+  opts.headers = Object.assign({"X-Pinggy-No-Screen": "1"}, opts.headers || {});
+  return fetch(API_BASE + path, opts);
+}
+
 const PHOTOS = ["assets/fortnite-1.jpg","assets/fortnite-2.jpg","assets/fortnite-3.jpg"];
 const strip = document.getElementById("strip");
 const frame = document.querySelector(".reel-frame");
@@ -127,7 +140,7 @@ async function requestInvoice() {
   if (!tg || !tg.initData) {
     throw new Error("Открой рулетку внутри Telegram, чтобы оплатить прокрутку звёздами.");
   }
-  const response = await fetch("/api/create-invoice", {
+  const response = await apiFetch("/api/create-invoice", {
     method: "POST",
     headers: {"Content-Type":"application/json", "X-Telegram-Init-Data":initData()},
     body: JSON.stringify({})
@@ -162,7 +175,7 @@ async function getPaidSpin() {
   // A successful invoice UI callback is not treated as payment proof;
   // the server waits for Telegram's successful_payment webhook.
   for (let attempt=0; attempt<12; attempt++) {
-    const response = await fetch("/api/spin", {
+    const response = await apiFetch("/api/spin", {
       method:"POST",
       headers:{"Content-Type":"application/json","X-Telegram-Init-Data":initData()},
       body:JSON.stringify({})
@@ -232,7 +245,7 @@ function localMsLeft() {
 async function loadFreeStatus() {
   freeServerMode = false;
   try {
-    const response = await fetch("/api/free-status", {headers: {"X-Telegram-Init-Data": initData()}});
+    const response = await apiFetch("/api/free-status", {headers: {"X-Telegram-Init-Data": initData()}});
     const data = await response.json().catch(() => null);
     if (data && (response.ok || response.status === 401)) {   // сервер есть
       freeServerMode = true;
@@ -250,7 +263,7 @@ async function getFreePrize() {
     return prize;
   }
   if (!tg || !tg.initData) throw new Error("Открой рулетку внутри Telegram.");
-  const response = await fetch("/api/free-spin", {
+  const response = await apiFetch("/api/free-spin", {
     method: "POST",
     headers: {"Content-Type": "application/json", "X-Telegram-Init-Data": initData()},
     body: JSON.stringify({})
