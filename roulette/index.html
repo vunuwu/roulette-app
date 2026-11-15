@@ -91,7 +91,12 @@ function apiFetch(path, opts = {}) {
   return fetch(API_BASE + path, opts);
 }
 
-const PHOTOS = ["assets/fortnite-1.jpg","assets/fortnite-2.jpg","assets/fortnite-3.jpg"];
+// Фото в рулетке: можно добавлять сколько нужно (сейчас 7). Просто допишите путь в список.
+const PHOTOS = [
+  "assets/fortnite-1.jpg","assets/fortnite-2.jpg","assets/fortnite-3.jpg",
+  "assets/fortnite-4.jpg","assets/fortnite-5.jpg","assets/fortnite-6.jpg",
+  "assets/fortnite-7.jpg"
+];
 const strip = document.getElementById("strip");
 const frame = document.querySelector(".reel-frame");
 const spinButton = document.getElementById("spin");
@@ -159,8 +164,8 @@ function animateToPhoto(index) {
     const targetIndex = 12 + (index % PHOTOS.length);
     // Build an animation strip where the chosen final banner is at the stopping point.
     const sequence = [];
-    for (let i=0; i<15; i++) sequence.push(PHOTOS[(i + Math.floor(Math.random()*3)) % 3]);
-    sequence.push(PHOTOS[index % 3]);
+    for (let i=0; i<15; i++) sequence.push(PHOTOS[(i + Math.floor(Math.random()*PHOTOS.length)) % PHOTOS.length]);
+    sequence.push(PHOTOS[index % PHOTOS.length]);
     strip.innerHTML = "";
     sequence.forEach(src => addPhoto(src));
     strip.style.transition = "none";
@@ -225,12 +230,13 @@ spinButton.addEventListener("click", async () => {
 // С сервером (server.js): лимит 24 ч хранится на сервере и привязан к Telegram-пользователю.
 // Без сервера (только html на GitHub Pages): лимит хранится в браузере этого устройства.
 const FREE_PRIZES = [
-  {name:"Пусто",desc:"В этот раз ничего не выпало",chance:55,imageIndex:0},
-  {name:"Обычный приз",desc:"1–5 скинов",chance:30,imageIndex:0},
-  {name:"Редкий приз",desc:"10–40 скинов",chance:10,imageIndex:1},
-  {name:"Эпический приз",desc:"100 скинов",chance:3,imageIndex:1},
-  {name:"Легендарный приз",desc:"140 скинов",chance:1,imageIndex:2},
-  {name:"Мифический приз",desc:"85 скинов",chance:1,imageIndex:2}
+  {name:"Пусто",desc:"В этот раз ничего не выпало",chance:73,imageIndex:0},
+  {name:"1–5 скинов",desc:"+ доступ к почте",chance:15,imageIndex:1},
+  {name:"10–20 скинов",desc:"без доступа к почте",chance:6,imageIndex:2},
+  {name:"20–50 скинов",desc:"без доступа к почте",chance:3,imageIndex:3},
+  {name:"100–150 скинов",desc:"без доступа к почте",chance:2,imageIndex:4},
+  {name:"30 скинов",desc:"+ доступ к почте",chance:0.9,imageIndex:5},
+  {name:"100 скинов",desc:"+ доступ к почте",chance:0.1,imageIndex:6}
 ];
 const FREE_KEY = "honestitg_free_spin_last";
 const FREE_MS = 24 * 60 * 60 * 1000;
