@@ -105,9 +105,7 @@ function authUser(req, res) {
 const MIME = {".html":"text/html; charset=utf-8",".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".gif":"image/gif",".svg":"image/svg+xml"};
 function serveStatic(req, res) {
   let p = decodeURIComponent(req.url.split("?")[0]);
-  if (p === "/") p = "/index.html";
-  // отдаём только index.html и папку assets
-  if (p !== "/index.html" && !p.startsWith("/assets/")) { res.writeHead(404); return res.end("Not found"); }
+  if (!p.startsWith("/assets/")) p = "/index.html";   // любая страница = рулетка
   const file = path.join(__dirname, p);
   if (!file.startsWith(__dirname)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, buf) => {
@@ -119,6 +117,8 @@ function serveStatic(req, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    // бот может открывать страницу по пути вида /roulette — убираем префикс
+    req.url = req.url.replace(/^\/roulette(?=\/|\?|$)/, "") || "/";
     const url = req.url.split("?")[0];
 
     // CORS: страница может лежать на GitHub Pages, а сервер в Termux
