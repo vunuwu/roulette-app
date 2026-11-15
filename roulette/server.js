@@ -28,12 +28,13 @@ if (!BOT_TOKEN || !WEBHOOK_SECRET) {
 
 // ---------- Призы (chance в процентах, сумма = 100) ----------
 const FREE_PRIZES = [
-  {name:"Пусто",desc:"В этот раз ничего не выпало",chance:55,imageIndex:0},
-  {name:"Обычный приз",desc:"1–5 скинов",chance:30,imageIndex:0},
-  {name:"Редкий приз",desc:"10–40 скинов",chance:10,imageIndex:1},
-  {name:"Эпический приз",desc:"100 скинов",chance:3,imageIndex:1},
-  {name:"Легендарный приз",desc:"140 скинов",chance:1,imageIndex:2},
-  {name:"Мифический приз",desc:"85 скинов",chance:1,imageIndex:2}
+  {name:"Пусто",desc:"В этот раз ничего не выпало",chance:73,imageIndex:0},
+  {name:"1–5 скинов",desc:"+ доступ к почте",chance:15,imageIndex:1},
+  {name:"10–20 скинов",desc:"без доступа к почте",chance:6,imageIndex:2},
+  {name:"20–50 скинов",desc:"без доступа к почте",chance:3,imageIndex:3},
+  {name:"100–150 скинов",desc:"без доступа к почте",chance:2,imageIndex:4},
+  {name:"30 скинов",desc:"+ доступ к почте",chance:0.9,imageIndex:5},
+  {name:"100 скинов",desc:"+ доступ к почте",chance:0.1,imageIndex:6}
 ];
 // ВАЖНО: таблицу платных призов поставьте свою. Сейчас это заглушка.
 const PAID_PRIZES = FREE_PRIZES;
