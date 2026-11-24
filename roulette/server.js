@@ -18,6 +18,9 @@ const PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const PORT = Number(process.env.PORT || 3000);
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data.json");
+const ADMIN_ID = String(process.env.ADMIN_ID || "");
+const SHOP_DATA_FILE = process.env.SHOP_DATA_FILE || path.join(__dirname, "shop-data.json");
+const SHOP_IMAGES_DIR = process.env.SHOP_IMAGES_DIR || path.join(__dirname, "product-images");
 const SPIN_PRICE = 100;
 const FREE_MS = 24 * 60 * 60 * 1000;
 
@@ -103,6 +106,24 @@ try {
     fs.readFileSync(DATA_FILE, "utf8")
   );
 } catch {}
+
+// Отдельное постоянное хранилище каталога магазина.
+let shopDb = { products: [] };
+try {
+  const loadedShop = JSON.parse(fs.readFileSync(SHOP_DATA_FILE, "utf8"));
+  if (loadedShop && Array.isArray(loadedShop.products)) shopDb = loadedShop;
+} catch {}
+
+function saveShop() {
+  try {
+    fs.mkdirSync(path.dirname(SHOP_DATA_FILE), { recursive: true });
+    fs.writeFileSync(SHOP_DATA_FILE + ".tmp", JSON.stringify(shopDb, null, 2));
+    fs.renameSync(SHOP_DATA_FILE + ".tmp", SHOP_DATA_FILE);
+  } catch (e) {
+    console.error("shop save error", e.message);
+    throw e;
+  }
+}
 
 function save() {
   try {
@@ -240,7 +261,7 @@ function readBody(req) {
 
       s += c;
 
-      if (s.length > 1e6) {
+      if (s.length > 7e6) {
         req.destroy();
       }
 
@@ -306,7 +327,9 @@ const MIME = {
     "image/gif",
 
   ".svg":
-    "image/svg+xml"
+    "image/svg+xml",
+  ".webp":
+    "image/webp"
 };
 
 function serveStatic(req, res) {
@@ -316,14 +339,17 @@ function serveStatic(req, res) {
       req.url.split("?")[0]
     );
 
-  if (!p.startsWith("/assets/")) {
+  // Разрешаем главную страницу, отдельную страницу магазина,
+  // игровые assets и загруженные фотографии товаров.
+  if (p === "/" || p === "") p = "/index.html";
+  if (!(p === "/index.html" || p === "/shop.html" || p.startsWith("/assets/") || p.startsWith("/product-images/"))) {
     p = "/index.html";
   }
 
-  const file =
-    path.join(__dirname, p);
+  const root = path.resolve(__dirname);
+  const file = path.resolve(root, "." + p);
 
-  if (!file.startsWith(__dirname)) {
+  if (file !== root && !file.startsWith(root + path.sep)) {
     res.writeHead(403);
     return res.end();
   }
@@ -776,6 +802,72 @@ const server =
             200,
             prize
           );
+        }
+
+        // ---------- Каталог магазина ----------
+
+        if (url === "/api/shop-products" && req.method === "GET") {
+          const u = authUser(req, res);
+          if (!u) return;
+          const products = shopDb.products
+            .filter(p => p && p.active !== false)
+            .slice()
+            .sort((a, b) => Number(b.id) - Number(a.id));
+          return send(res, 200, {
+            products,
+            isAdmin: Boolean(ADMIN_ID && String(u.id) === ADMIN_ID)
+          });
+        }
+
+        if (url === "/api/shop-products" && req.method === "POST") {
+          const u = authUser(req, res);
+          if (!u) return;
+          if (!ADMIN_ID || String(u.id) !== ADMIN_ID) {
+            return send(res, 403, { error: "Нет доступа к управлению магазином." });
+          }
+
+          const b = await readBody(req);
+          if (b.action === "delete") {
+            const id = Number(b.id);
+            const before = shopDb.products.length;
+            shopDb.products = shopDb.products.filter(p => Number(p.id) !== id);
+            if (shopDb.products.length === before) return send(res, 404, { error: "Товар не найден." });
+            saveShop();
+            return send(res, 200, { ok: true });
+          }
+
+          const name = String(b.name || "").trim().slice(0, 120);
+          const description = String(b.description || "").trim().slice(0, 2000);
+          const price = String(b.price || "").trim().slice(0, 60);
+          const quantity = Math.max(0, Math.min(1000000, Math.floor(Number(b.quantity) || 0)));
+          if (!name) return send(res, 400, { error: "Укажите название товара." });
+
+          let product = shopDb.products.find(p => Number(p.id) === Number(b.id));
+          if (!product) {
+            product = { id: Date.now() + crypto.randomInt(1, 1000), image: "", createdAt: Date.now() };
+            shopDb.products.push(product);
+          }
+          product.name = name;
+          product.description = description;
+          product.price = price;
+          product.quantity = quantity;
+          product.active = true;
+          product.updatedAt = Date.now();
+
+          if (typeof b.imageData === "string" && b.imageData) {
+            const match = b.imageData.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+            if (!match) return send(res, 400, { error: "Фото должно быть JPG, PNG или WEBP." });
+            const ext = match[1] === "jpeg" ? "jpg" : match[1];
+            const bytes = Buffer.from(match[2], "base64");
+            if (!bytes.length || bytes.length > 4 * 1024 * 1024) return send(res, 400, { error: "Размер фото — максимум 4 МБ." });
+            fs.mkdirSync(SHOP_IMAGES_DIR, { recursive: true });
+            const filename = `${product.id}-${crypto.randomBytes(5).toString("hex")}.${ext}`;
+            fs.writeFileSync(path.join(SHOP_IMAGES_DIR, filename), bytes);
+            product.image = `/product-images/${filename}`;
+          }
+
+          saveShop();
+          return send(res, 200, { ok: true, product });
         }
 
         // ---------- Статика ----------
