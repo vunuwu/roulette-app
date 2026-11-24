@@ -261,7 +261,7 @@ function readBody(req) {
 
       s += c;
 
-      if (s.length > 7e6) {
+      if (s.length > 35e6) {
         req.destroy();
       }
 
@@ -854,16 +854,31 @@ const server =
           product.active = true;
           product.updatedAt = Date.now();
 
-          if (typeof b.imageData === "string" && b.imageData) {
-            const match = b.imageData.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
-            if (!match) return send(res, 400, { error: "Фото должно быть JPG, PNG или WEBP." });
-            const ext = match[1] === "jpeg" ? "jpg" : match[1];
-            const bytes = Buffer.from(match[2], "base64");
-            if (!bytes.length || bytes.length > 4 * 1024 * 1024) return send(res, 400, { error: "Размер фото — максимум 4 МБ." });
+          // До 7 фотографий на товар. Старый формат imageData тоже поддерживается.
+          const incomingImages = Array.isArray(b.imagesData)
+            ? b.imagesData
+            : (typeof b.imageData === "string" && b.imageData ? [b.imageData] : []);
+          if (incomingImages.length > 7) {
+            return send(res, 400, { error: "Можно загрузить не более 7 фотографий." });
+          }
+          if (incomingImages.length) {
+            const savedImages = [];
             fs.mkdirSync(SHOP_IMAGES_DIR, { recursive: true });
-            const filename = `${product.id}-${crypto.randomBytes(5).toString("hex")}.${ext}`;
-            fs.writeFileSync(path.join(SHOP_IMAGES_DIR, filename), bytes);
-            product.image = `/product-images/${filename}`;
+            for (const imageData of incomingImages) {
+              if (typeof imageData !== "string") return send(res, 400, { error: "Некорректное фото." });
+              const match = imageData.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+              if (!match) return send(res, 400, { error: "Фото должно быть JPG, PNG или WEBP." });
+              const ext = match[1] === "jpeg" ? "jpg" : match[1];
+              const bytes = Buffer.from(match[2], "base64");
+              if (!bytes.length || bytes.length > 3 * 1024 * 1024) return send(res, 400, { error: "Каждое фото — максимум 3 МБ." });
+              const filename = `${product.id}-${crypto.randomBytes(5).toString("hex")}.${ext}`;
+              fs.writeFileSync(path.join(SHOP_IMAGES_DIR, filename), bytes);
+              savedImages.push(`/product-images/${filename}`);
+            }
+            product.images = savedImages;
+            product.image = savedImages[0]; // совместимость со старой версией каталога
+          } else if (!Array.isArray(product.images) && product.image) {
+            product.images = [product.image];
           }
 
           saveShop();
