@@ -67,6 +67,17 @@ button:focus-visible{outline:2px solid #bfe6ff;outline-offset:3px}
 .rules .chance-value{font-variant-numeric:tabular-nums;color:#e6f3ff}
 @media(max-width:360px){main{padding-left:15px;padding-right:15px}.reel-wrap{max-width:100%}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important}}
+
+.shop-products{display:grid;grid-template-columns:1fr;gap:13px;text-align:left}
+.shop-card{overflow:hidden;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#163050,#10223a);text-align:left}
+.shop-card img{width:100%;height:190px;object-fit:contain;background:#081321;display:block}
+.shop-card-body{padding:13px}.shop-card h3{margin:0 0 6px;font-size:17px}.shop-card p{margin:0 0 10px;color:var(--mute);font-size:13px;white-space:pre-wrap}
+.shop-card-meta{display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:800}
+.shop-price{color:#bfe6ff;font-size:17px}.shop-qty{font-size:12px;color:#b7cde0}
+.shop-admin-actions{display:flex;gap:8px;margin-top:12px}.shop-admin-actions button{margin:0;flex:1;padding:10px;font-size:13px}
+.product-label{display:block;font-size:13px;font-weight:700;margin:10px 0}
+.product-label input,.product-label textarea{display:block;width:100%;margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:11px;background:#0b1b2e;color:var(--ink);font:inherit}
+.product-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 </style>
 </head>
 <body>
@@ -92,6 +103,7 @@ button:focus-visible{outline:2px solid #bfe6ff;outline-offset:3px}
   <div class="tabs">
     <button class="tab-btn active" id="rouletteTab" type="button">🎰 Рулетка</button>
     <button class="tab-btn" id="inventoryTab" type="button">🎒 Инвентарь</button>
+    <button class="tab-btn" id="shopStockTab" type="button">🛒 НАЛИЧИЕ МАГАЗИНА</button>
   </div>
 
   <section class="tab-panel active" id="roulettePanel">
@@ -102,6 +114,26 @@ button:focus-visible{outline:2px solid #bfe6ff;outline-offset:3px}
   <section class="tab-panel" id="inventoryPanel">
     <div id="inventoryList" class="inventory-list">
       <div class="inventory-empty">Загрузка инвентаря…</div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="shopStockPanel">
+    <h2 style="font-size:20px;margin:8px 0 14px">🛒 НАЛИЧИЕ МАГАЗИНА</h2>
+    <div id="shopProducts" class="shop-products"><div class="inventory-empty">Загрузка каталога…</div></div>
+    <div id="shopProductAdmin" style="display:none;text-align:left;margin-top:22px;padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(17,35,59,.8)">
+      <h3 id="productFormTitle" style="margin:0 0 12px">➕ Добавить товар</h3>
+      <input type="hidden" id="productId">
+      <label class="product-label">Фото товара<input id="productImage" type="file" accept="image/jpeg,image/png,image/webp"></label>
+      <img id="productPreview" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:12px;margin:8px 0;background:#081321">
+      <label class="product-label">Название<input id="productName" maxlength="120" placeholder="Например, V-Bucks"></label>
+      <label class="product-label">Описание<textarea id="productDescription" maxlength="2000" rows="3" placeholder="Описание товара и характеристики"></textarea></label>
+      <div class="product-fields">
+        <label class="product-label">Цена<input id="productPrice" maxlength="60" placeholder="500 ₽"></label>
+        <label class="product-label">Количество<input id="productQuantity" type="number" min="0" max="1000000" value="1"></label>
+      </div>
+      <button id="saveProduct" type="button">💾 Сохранить товар</button>
+      <button id="cancelProductEdit" type="button" style="display:none;background:#354b63">Отмена редактирования</button>
+      <div id="productStatus" style="font-size:13px;margin-top:8px"></div>
     </div>
   </section>
 
@@ -155,23 +187,225 @@ const inventoryTab = document.getElementById("inventoryTab");
 const roulettePanel = document.getElementById("roulettePanel");
 const inventoryPanel = document.getElementById("inventoryPanel");
 const inventoryList = document.getElementById("inventoryList");
+const shopStockTab = document.getElementById("shopStockTab");
+const shopStockPanel = document.getElementById("shopStockPanel");
 
 const CARD_MS = 0;
 
 function setTab(name) {
   const inventory = name === "inventory";
+  const stock = name === "stock";
 
-  rouletteTab.classList.toggle("active", !inventory);
+  rouletteTab.classList.toggle("active", name === "roulette");
   inventoryTab.classList.toggle("active", inventory);
+  shopStockTab.classList.toggle("active", stock);
 
-  roulettePanel.classList.toggle("active", !inventory);
+  roulettePanel.classList.toggle("active", name === "roulette");
   inventoryPanel.classList.toggle("active", inventory);
+  shopStockPanel.classList.toggle("active", stock);
 
   if (inventory) loadInventory();
+  if (stock) loadShopStock();
 }
 
 rouletteTab.addEventListener("click", () => setTab("roulette"));
 inventoryTab.addEventListener("click", () => setTab("inventory"));
+shopStockTab.addEventListener("click", () => setTab("stock"));
+
+let selectedProductImage = "";
+
+function productAuthHeaders(json=true) {
+  const h = {"X-Telegram-Init-Data": initData()};
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
+
+function safeText(v) {
+  return String(v ?? "").replace(/[&<>"']/g,c=>({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
+  }[c]));
+}
+
+async function loadShopStock() {
+  const host = document.getElementById("shopProducts");
+
+  try {
+    if (!tg?.initData) throw new Error("Откройте рулетку внутри Telegram.");
+
+    const response = await apiFetch("/api/shop-products", {
+      headers: productAuthHeaders(false)
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) throw new Error(data.error || "Не удалось загрузить каталог.");
+
+    document.getElementById("shopProductAdmin").style.display =
+      data.isAdmin ? "block" : "none";
+
+    if (!data.products?.length) {
+      host.innerHTML = '<div class="inventory-empty">В магазине пока нет товаров.</div>';
+      return;
+    }
+
+    host.innerHTML = data.products.map(p => `
+      <article class="shop-card">
+        ${p.image ? `<img src="${safeText(p.image)}" alt="${safeText(p.name)}">` : '<div style="height:130px;display:grid;place-items:center;background:#081321;font-size:42px">🛍️</div>'}
+        <div class="shop-card-body">
+          <h3>${safeText(p.name)}</h3>
+          ${p.description ? `<p>${safeText(p.description)}</p>` : ""}
+          <div class="shop-card-meta">
+            <span class="shop-price">${safeText(p.price || "Цена по запросу")}</span>
+            <span class="shop-qty">${p.quantity > 0 ? `📦 В наличии: ${p.quantity}` : "❌ Нет в наличии"}</span>
+          </div>
+          ${data.isAdmin ? `<div class="shop-admin-actions">
+            <button type="button" onclick="editShopProduct(${Number(p.id)})">✏️ Изменить</button>
+            <button type="button" style="background:#713b49" onclick="deleteShopProduct(${Number(p.id)})">🗑 Удалить</button>
+          </div>` : ""}
+        </div>
+      </article>`).join("");
+
+    window.shopProductsCache = data.products;
+
+  } catch (e) {
+    host.innerHTML = `<div class="inventory-empty">${safeText(e.message || "Ошибка загрузки каталога.")}</div>`;
+  }
+}
+
+window.editShopProduct = function(id) {
+  const p = (window.shopProductsCache || []).find(x => x.id === id);
+  if (!p) return;
+
+  document.getElementById("productId").value = p.id;
+  document.getElementById("productName").value = p.name;
+  document.getElementById("productDescription").value = p.description;
+  document.getElementById("productPrice").value = p.price;
+  document.getElementById("productQuantity").value = p.quantity;
+
+  selectedProductImage = "";
+
+  const preview = document.getElementById("productPreview");
+
+  if (p.image) {
+    preview.src = p.image;
+    preview.style.display = "block";
+  } else {
+    preview.style.display = "none";
+  }
+
+  document.getElementById("productFormTitle").textContent = "✏️ Изменить товар";
+  document.getElementById("cancelProductEdit").style.display = "block";
+  document.getElementById("productStatus").textContent = "Можно заменить фото или оставить прежнее.";
+
+  document.getElementById("shopProductAdmin").scrollIntoView({
+    behavior:"smooth",
+    block:"start"
+  });
+};
+
+function resetProductForm() {
+  ["productId","productName","productDescription","productPrice"].forEach(
+    id => document.getElementById(id).value = ""
+  );
+
+  document.getElementById("productQuantity").value = "1";
+  document.getElementById("productImage").value = "";
+  document.getElementById("productPreview").style.display = "none";
+  document.getElementById("productFormTitle").textContent = "➕ Добавить товар";
+  document.getElementById("cancelProductEdit").style.display = "none";
+  document.getElementById("productStatus").textContent = "";
+
+  selectedProductImage = "";
+}
+
+document.getElementById("cancelProductEdit").addEventListener("click", resetProductForm);
+
+document.getElementById("productImage").addEventListener("change", async e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (!["image/jpeg","image/png","image/webp"].includes(file.type)) {
+    e.target.value = "";
+    alert("Выберите JPG, PNG или WEBP.");
+    return;
+  }
+
+  if (file.size > 4 * 1024 * 1024) {
+    e.target.value = "";
+    alert("Фото должно быть не больше 4 МБ.");
+    return;
+  }
+
+  selectedProductImage = await new Promise((resolve,reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+  const preview = document.getElementById("productPreview");
+  preview.src = selectedProductImage;
+  preview.style.display = "block";
+});
+
+document.getElementById("saveProduct").addEventListener("click", async () => {
+  const status = document.getElementById("productStatus");
+
+  const payload = {
+    id:Number(document.getElementById("productId").value || 0),
+    name:document.getElementById("productName").value,
+    description:document.getElementById("productDescription").value,
+    price:document.getElementById("productPrice").value,
+    quantity:Number(document.getElementById("productQuantity").value || 0),
+    imageData:selectedProductImage
+  };
+
+  status.textContent = "Сохраняем товар…";
+
+  try {
+    const r = await apiFetch("/api/shop-products", {
+      method:"POST",
+      headers:productAuthHeaders(),
+      body:JSON.stringify(payload)
+    });
+
+    const d = await r.json().catch(() => ({}));
+
+    if (!r.ok) throw new Error(d.error || "Ошибка сохранения.");
+
+    resetProductForm();
+    status.textContent = "✅ Товар сохранён.";
+    await loadShopStock();
+
+  } catch(e) {
+    status.textContent = "❌ " + (e.message || "Ошибка.");
+  }
+});
+
+window.deleteShopProduct = async function(id) {
+  if (!confirm("Удалить этот товар из каталога?")) return;
+
+  try {
+    const r = await apiFetch("/api/shop-products", {
+      method:"POST",
+      headers:productAuthHeaders(),
+      body:JSON.stringify({action:"delete",id})
+    });
+
+    const d = await r.json().catch(() => ({}));
+
+    if (!r.ok) throw new Error(d.error || "Не удалось удалить.");
+
+    await loadShopStock();
+
+  } catch(e) {
+    alert(e.message || "Ошибка удаления.");
+  }
+};
 
 function inventoryImage(index) {
   return PHOTOS[
@@ -214,9 +448,7 @@ async function loadInventory() {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(
-        data.error || "Не удалось загрузить инвентарь."
-      );
+      throw new Error(data.error || "Не удалось загрузить инвентарь.");
     }
 
     const items = Array.isArray(data.items) ? data.items : [];
@@ -234,11 +466,9 @@ async function loadInventory() {
           <div class="inventory-name">
             ${escapeHtml(item.prize)}
           </div>
-
           <div class="inventory-desc">
             ${escapeHtml(item.desc || "")}
           </div>
-
           <div class="inventory-date">
             ${escapeHtml(formatInventoryDate(item.t))}
             ·
@@ -286,7 +516,6 @@ function initData() {
 function fmtLeft(ms) {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
-
   return h + " ч " + m + " мин";
 }
 
@@ -305,9 +534,7 @@ function setBusy(busy, label) {
 
   spinButton.textContent =
     label ||
-    (busy
-      ? "Оплата / прокрутка…"
-      : "Крутить за 100 ⭐");
+    (busy ? "Оплата / прокрутка…" : "Крутить за 100 ⭐");
 
   updateFreeButton();
 }
@@ -339,9 +566,7 @@ async function requestInvoice() {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok || !data.invoiceUrl) {
-    throw new Error(
-      data.error || "Не удалось создать счёт на оплату."
-    );
+    throw new Error(data.error || "Не удалось создать счёт на оплату.");
   }
 
   return data.invoiceUrl;
@@ -350,7 +575,6 @@ async function requestInvoice() {
 function animateToPhoto(index) {
   return new Promise(resolve => {
     const cardHeight = frame.clientHeight;
-
     const sequence = [];
 
     for (let i = 0; i < 15; i++) {
@@ -365,7 +589,6 @@ function animateToPhoto(index) {
     sequence.push(PHOTOS[index % PHOTOS.length]);
 
     strip.innerHTML = "";
-
     sequence.forEach(src => addPhoto(src));
 
     strip.style.transition = "none";
@@ -391,7 +614,6 @@ function animateToPhoto(index) {
 
 async function getPaidSpin() {
   for (let attempt = 0; attempt < 12; attempt++) {
-
     const response = await apiFetch("/api/spin", {
       method:"POST",
       headers:{
@@ -403,14 +625,10 @@ async function getPaidSpin() {
 
     const data = await response.json().catch(() => ({}));
 
-    if (response.ok) {
-      return data;
-    }
+    if (response.ok) return data;
 
     if (response.status !== 409) {
-      throw new Error(
-        data.error || "Не удалось запустить рулетку."
-      );
+      throw new Error(data.error || "Не удалось запустить рулетку.");
     }
 
     await sleep(1000);
@@ -425,7 +643,6 @@ spinButton.addEventListener("click", async () => {
   if (isSpinning) return;
 
   resultBox.textContent = "";
-
   setBusy(true, "Создаём счёт…");
 
   try {
@@ -433,19 +650,13 @@ spinButton.addEventListener("click", async () => {
 
     await new Promise((resolve, reject) => {
       tg.openInvoice(invoiceUrl, status => {
-
         if (status === "paid") {
           resolve();
         } else if (status === "cancelled") {
           reject(new Error("Оплата отменена."));
         } else {
-          reject(
-            new Error(
-              "Платёж не завершён. Попробуйте ещё раз."
-            )
-          );
+          reject(new Error("Платёж не завершён. Попробуйте ещё раз."));
         }
-
       });
     });
 
@@ -458,38 +669,27 @@ spinButton.addEventListener("click", async () => {
     await animateToPhoto(prize.imageIndex ?? 0);
 
     if (prize.name === "Пусто") {
-
       resultBox.textContent =
         "В этот раз без приза. Спасибо за участие!";
-
     } else {
-
       resultBox.innerHTML =
         `<b>${escapeHtml(prize.name)}</b><br>` +
         `${escapeHtml(prize.desc)}<br>` +
         `<span style="color:var(--mute);font-size:13px">
           Для получения приза напишите менеджеру.
         </span>`;
-
     }
 
     if (tg?.HapticFeedback) {
       tg.HapticFeedback.notificationOccurred("success");
     }
 
-    cooldownBox.textContent =
-      "Прокрутка оплачена · 100 ⭐";
+    cooldownBox.textContent = "Прокрутка оплачена · 100 ⭐";
 
   } catch (error) {
-
-    showError(
-      error.message || "Что-то пошло не так."
-    );
-
+    showError(error.message || "Что-то пошло не так.");
   } finally {
-
     setBusy(false);
-
   }
 });
 
@@ -549,10 +749,7 @@ function pickFreePrizeLocal() {
 
   for (const p of FREE_PRIZES) {
     sum += p.chance;
-
-    if (roll < sum) {
-      return p;
-    }
+    if (roll < sum) return p;
   }
 
   return FREE_PRIZES[0];
@@ -563,8 +760,7 @@ function localMsLeft() {
     return Math.max(
       0,
       FREE_MS -
-      (Date.now() -
-       Number(localStorage.getItem(FREE_KEY) || 0))
+      (Date.now() - Number(localStorage.getItem(FREE_KEY) || 0))
     );
   } catch {
     return 0;
@@ -575,29 +771,17 @@ async function loadFreeStatus() {
   freeServerMode = false;
 
   try {
-
-    const response = await apiFetch(
-      "/api/free-status",
-      {
-        headers: {
-          "X-Telegram-Init-Data": initData()
-        }
+    const response = await apiFetch("/api/free-status", {
+      headers: {
+        "X-Telegram-Init-Data": initData()
       }
-    );
+    });
 
-    const data =
-      await response.json().catch(() => null);
+    const data = await response.json().catch(() => null);
 
-    if (
-      data &&
-      (response.ok || response.status === 401)
-    ) {
+    if (data && (response.ok || response.status === 401)) {
       freeServerMode = true;
-
-      freeMsLeft =
-        response.ok
-          ? Number(data.msLeft || 0)
-          : 0;
+      freeMsLeft = response.ok ? Number(data.msLeft || 0) : 0;
     }
 
   } catch {}
@@ -610,141 +794,92 @@ async function loadFreeStatus() {
 }
 
 async function getFreePrize() {
-
   if (!freeServerMode) {
-
     if (localMsLeft() > 0) {
-      throw new Error(
-        "Бесплатная прокрутка уже использована."
-      );
+      throw new Error("Бесплатная прокрутка уже использована.");
     }
 
     const prize = pickFreePrizeLocal();
 
     try {
-      localStorage.setItem(
-        FREE_KEY,
-        String(Date.now())
-      );
+      localStorage.setItem(FREE_KEY, String(Date.now()));
     } catch {}
 
     return prize;
   }
 
   if (!tg || !tg.initData) {
-    throw new Error(
-      "Откройте рулетку внутри Telegram."
-    );
+    throw new Error("Откройте рулетку внутри Telegram.");
   }
 
-  const response = await apiFetch(
-    "/api/free-spin",
-    {
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "X-Telegram-Init-Data":initData()
-      },
-      body:JSON.stringify({})
-    }
-  );
+  const response = await apiFetch("/api/free-spin", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "X-Telegram-Init-Data":initData()
+    },
+    body:JSON.stringify({})
+  });
 
-  const prize =
-    await response.json().catch(() => ({}));
+  const prize = await response.json().catch(() => ({}));
 
   if (response.status === 429) {
-    freeMsLeft =
-      Number(prize.msLeft || 0);
-
+    freeMsLeft = Number(prize.msLeft || 0);
     throw new Error(prize.error);
   }
 
   if (!response.ok) {
-    throw new Error(
-      prize.error ||
-      "Не удалось запустить прокрутку."
-    );
+    throw new Error(prize.error || "Не удалось запустить прокрутку.");
   }
 
   return prize;
 }
 
 freeButton.addEventListener("click", async () => {
-
   if (isSpinning || freeMsLeft > 0) return;
 
   resultBox.textContent = "";
-
   isSpinning = true;
-
   updateFreeButton();
-
   spinButton.disabled = true;
 
   try {
-
     const prize = await getFreePrize();
 
     freeMsLeft = FREE_MS;
 
-    await animateToPhoto(
-      prize.imageIndex ?? 0
-    );
+    await animateToPhoto(prize.imageIndex ?? 0);
 
     if (prize.name === "Пусто") {
-
-      resultBox.textContent =
-        "В этот раз без приза. Приходи завтра!";
-
+      resultBox.textContent = "В этот раз без приза. Приходи завтра!";
     } else {
-
       resultBox.innerHTML =
         `<b>${escapeHtml(prize.name)}</b><br>` +
         `${escapeHtml(prize.desc)}<br>` +
         `<span style="color:var(--mute);font-size:13px">
           Для получения приза напишите менеджеру.
         </span>`;
-
     }
 
     if (tg?.HapticFeedback) {
-      tg.HapticFeedback.notificationOccurred(
-        "success"
-      );
+      tg.HapticFeedback.notificationOccurred("success");
     }
 
   } catch (error) {
-
-    showError(
-      error.message ||
-      "Что-то пошло не так."
-    );
+    showError(error.message || "Что-то пошло не так.");
 
   } finally {
-
     isSpinning = false;
-
     spinButton.disabled = false;
-
     updateFreeButton();
-
   }
 });
 
 setInterval(() => {
-
   if (freeMsLeft > 0) {
-
-    freeMsLeft =
-      Math.max(
-        0,
-        freeMsLeft - 30000
-      );
-
+    freeMsLeft = Math.max(0, freeMsLeft - 30000);
     updateFreeButton();
-
   }
-
 }, 30000);
 
 loadFreeStatus();
@@ -762,8 +897,7 @@ function escapeHtml(value) {
   );
 }
 
-cooldownBox.textContent =
-  "Оплата через Telegram Stars";
+cooldownBox.textContent = "Оплата через Telegram Stars";
 </script>
 
 <script>
@@ -783,15 +917,12 @@ cooldownBox.textContent =
   function rs() {
     w = innerWidth;
     h = innerHeight;
-
     c.width = w * d;
     c.height = h * d;
-
     x.setTransform(d,0,0,d,0,0);
   }
 
   rs();
-
   addEventListener("resize", rs);
 
   for (let i = 0; i < 55; i++) {
@@ -805,11 +936,9 @@ cooldownBox.textContent =
   }
 
   function t() {
-
     x.clearRect(0,0,w,h);
 
     for (const a of f) {
-
       a.y += a.s;
       a.p += .012;
       a.x += Math.sin(a.p) * .35;
@@ -820,14 +949,7 @@ cooldownBox.textContent =
       }
 
       x.beginPath();
-
-      x.arc(
-        a.x,
-        a.y,
-        a.r,
-        0,
-        6.283
-      );
+      x.arc(a.x,a.y,a.r,0,6.283);
 
       x.fillStyle =
         "rgba(235,245,255," +
@@ -841,7 +963,6 @@ cooldownBox.textContent =
   }
 
   t();
-
 })();
 </script>
 
