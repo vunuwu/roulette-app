@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Наличие магазина — honestiTG</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--bg:#0a1424;--panel:#11233b;--ink:#eef6ff;--mute:#9bb2c8;--line:rgba(150,200,240,.2);--blue:#398fd0}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;padding:24px 16px 50px;background:radial-gradient(ellipse at top,#24507f,#0a1424 70%);color:var(--ink);font:15px/1.45 "Bricolage Grotesque",sans-serif}
+main{max-width:760px;margin:auto}h1{font-size:28px;margin:8px 0}.muted{color:var(--mute)}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+a.back{color:#c4e6ff;text-decoration:none;border:1px solid var(--line);padding:9px 13px;border-radius:10px}
+.products{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.card{background:linear-gradient(145deg,#163050,#10223a);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.card img{width:100%;height:210px;object-fit:contain;background:#081321;display:block}.body{padding:14px}.body h2{font-size:18px;margin:0 0 7px}.desc{color:var(--mute);white-space:pre-wrap;font-size:13px;margin:0 0 12px}
+.meta{display:flex;justify-content:space-between;gap:8px;align-items:center}.price{font-size:18px;font-weight:800;color:#bfe6ff}.qty{font-size:12px;color:#c5d9e9}
+.empty{padding:24px;text-align:center;border:1px dashed var(--line);border-radius:14px;color:var(--mute)}
+.admin{margin-top:24px;padding:16px;background:rgba(17,35,59,.9);border:1px solid var(--line);border-radius:16px}
+label{display:block;font-size:13px;font-weight:700;margin:11px 0}input,textarea{display:block;width:100%;margin-top:6px;padding:11px;border:1px solid var(--line);border-radius:10px;background:#0b1b2e;color:var(--ink);font:inherit}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}button{border:0;border-radius:10px;padding:11px 14px;background:linear-gradient(100deg,#2467b0,#4aa8ea);color:white;font:inherit;font-weight:700;cursor:pointer}
+.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1}.delete{background:#713b49}.preview{display:none;max-width:100%;max-height:220px;object-fit:contain;margin:8px auto;border-radius:10px}
+.status{font-size:13px;margin-top:10px;color:#bfe6ff}
+</style></head><body><main>
+<div class="top"><div><div class="muted">honestiTG</div><h1>🛒 Наличие магазина</h1><div class="muted">Актуальные товары, фотографии и цены</div></div><span class="muted">Каталог товаров</span></div>
+<div id="products" class="products"><div class="empty">Загружаем каталог…</div></div>
+<section id="admin" class="admin" hidden><h2 id="formTitle" style="margin:0 0 12px">➕ Добавить товар</h2><input id="pid" type="hidden">
+<label>Фото товара (JPG, PNG, WEBP)<input id="photo" type="file" accept="image/jpeg,image/png,image/webp"></label><img id="preview" class="preview">
+<label>Название<input id="name" maxlength="120" placeholder="Название товара"></label>
+<label>Описание<textarea id="description" rows="3" maxlength="2000" placeholder="Описание и характеристики"></textarea></label>
+<div class="grid"><label>Цена<input id="price" maxlength="60" placeholder="500 ₽"></label><label>Количество<input id="quantity" type="number" min="0" max="1000000" value="1"></label></div>
+<button id="save">Сохранить товар</button> <button id="cancel" class="delete" hidden>Отмена</button><div id="status" class="status"></div></section>
+</main>
+<script src="https://telegram.org/js/telegram-web-app.js"></script><script>
+const tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();
+const API_BASE=(new URLSearchParams(location.search).get("api")||"").replace(/\/$/,"");
+const api=(path,options={})=>fetch(API_BASE+path,{...options,headers:{...(options.headers||{}),"X-Telegram-Init-Data":tg?.initData||""}});
+const imageUrl=(path)=>path?(path.startsWith("http")?path:API_BASE+path):"";
+const $=id=>document.getElementById(id);let products=[],imageData="";
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function load(){const host=$("products");try{if(!tg?.initData)throw Error("Откройте каталог через кнопку «Наличие магазина» в Telegram.");if(!API_BASE)throw Error("Не настроен адрес API магазина.");const r=await api("/api/shop-products");const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка загрузки");products=d.products||[];$("admin").hidden=!d.isAdmin;if(!products.length){host.innerHTML='<div class="empty">В магазине пока нет товаров.</div>';return}
+host.innerHTML=products.map(p=>`<article class="card">${p.image?`<img src="${esc(imageUrl(p.image))}" alt="${esc(p.name)}">`:'<div style="height:130px;display:grid;place-items:center;font-size:42px">🛍️</div>'}<div class="body"><h2>${esc(p.name)}</h2>${p.description?`<p class="desc">${esc(p.description)}</p>`:""}<div class="meta"><span class="price">${esc(p.price||"Цена по запросу")}</span><span class="qty">${p.quantity>0?"📦 В наличии: "+p.quantity:"❌ Нет в наличии"}</span></div>${d.isAdmin?`<div class="actions"><button onclick="edit(${p.id})">Изменить</button><button class="delete" onclick="removeProduct(${p.id})">Удалить</button></div>`:""}</div></article>`).join("");
+}catch(e){host.innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
+window.edit=id=>{const p=products.find(x=>x.id===id);if(!p)return;$("pid").value=p.id;$("name").value=p.name;$("description").value=p.description;$("price").value=p.price;$("quantity").value=p.quantity;imageData="";$("preview").style.display=p.image?"block":"none";if(p.image)$("preview").src=imageUrl(p.image);$("formTitle").textContent="✏️ Изменить товар";$("cancel").hidden=false;window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"})};
+function reset(){["pid","name","description","price"].forEach(id=>$(id).value="");$("quantity").value=1;$("photo").value="";$("preview").style.display="none";$("formTitle").textContent="➕ Добавить товар";$("cancel").hidden=true;imageData="";$("status").textContent=""}
+$("cancel").onclick=reset;
+$("photo").onchange=async e=>{const f=e.target.files?.[0];if(!f)return;if(!["image/jpeg","image/png","image/webp"].includes(f.type)||f.size>4*1024*1024){alert("Выберите JPG, PNG или WEBP до 4 МБ.");e.target.value="";return}imageData=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});$("preview").src=imageData;$("preview").style.display="block"};
+$("save").onclick=async()=>{const payload={id:Number($("pid").value||0),name:$("name").value,description:$("description").value,price:$("price").value,quantity:Number($("quantity").value||0),imageData};$("status").textContent="Сохраняем…";try{const r=await api("/api/shop-products",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка сохранения");reset();$("status").textContent="Сохранено";await load()}catch(e){$("status").textContent="Ошибка: "+e.message}};
+window.removeProduct=async id=>{if(!confirm("Удалить товар?"))return;try{const r=await api("/api/shop-products",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"delete",id})});const d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка удаления");await load()}catch(e){alert(e.message)}};
+load();
+</script></body></html>
