@@ -155,6 +155,15 @@ function user(id) {
   return db.users[id];
 }
 
+// Проверка счёта перед оплатой (общая для своего вебхука и для основного бота)
+function isValidSpinInvoice(userId, currency, amount, payload) {
+  return (
+    currency === "XTR" &&
+    Number(amount) === SPIN_PRICE &&
+    String(payload || "").startsWith(`spin:${userId}:`)
+  );
+}
+
 // ---------- Telegram ----------
 
 async function tgApi(method, body) {
@@ -440,6 +449,30 @@ const server =
           return;
         }
 
+        // ---------- Проверка счёта перед оплатой (pre_checkout_query) ----------
+        // Основной бот вызывает это в обработчике pre_checkout_query
+        // и отвечает в Telegram по полю ok.
+
+        if (
+          req.method === "POST" &&
+          url === "/internal/precheckout"
+        ) {
+          if (req.headers["x-secret"] !== WEBHOOK_SECRET) {
+            return send(res, 403, { error: "forbidden" });
+          }
+
+          const b = await readBody(req);
+
+          return send(res, 200, {
+            ok: isValidSpinInvoice(
+              b.userId,
+              b.currency,
+              b.totalAmount,
+              b.payload
+            )
+          });
+        }
+
         // ---------- Подтверждение оплаты от основного бота ----------
 
         if (
@@ -463,6 +496,10 @@ const server =
 
           const b =
             await readBody(req);
+
+          if (!b.userId) {
+            return send(res, 400, { error: "userId required" });
+          }
 
           const d =
             user(b.userId);
@@ -935,15 +972,12 @@ async function handleUpdate(update) {
     const q =
       update.pre_checkout_query;
 
-    const ok =
-      q.currency === "XTR" &&
-      q.total_amount ===
-        SPIN_PRICE &&
-      String(
-        q.invoice_payload
-      ).startsWith(
-        `spin:${q.from.id}:`
-      );
+    const ok = isValidSpinInvoice(
+      q.from.id,
+      q.currency,
+      q.total_amount,
+      q.invoice_payload
+    );
 
     await tgApi(
       "answerPreCheckoutQuery",
